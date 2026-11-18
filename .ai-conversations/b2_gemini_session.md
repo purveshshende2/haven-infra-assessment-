@@ -1,49 +1,14 @@
-# Haven — Platform Infrastructure Assessment
+## AI Prompts Used
 
-Haven is a multi-tenant real estate platform.
+The following prompts were used to assist with implementation, testing, and troubleshooting during this assessment:
 
-## Domain model
+1. **Tenant-Scoped Access Control & Cost Tagging Check (B2)**
+   > "I'm working on the Haven infra repo based on the README domain model and existing codebase. Help me implement two things in Python:
+   > 1) An access check (`can_access_screening_report`) ensuring a `PropertyManager` can only view screening reports under their own `landlord_account_id` (failing closed when records are missing), with unit tests for same-account allow and cross-account deny using `app/seed_data.py`.
+   > 2) A generic, idempotent cost-tagging check (`scripts/cost_tag_check.py`) on `terraform show -json` plan output that inspects created/updated taggable resources and fails with a non-zero exit code if any taggable resource is missing `landlord_account_id`."
 
-```
-LandlordAccount  (the billing unit)
-  └── Property
-        └── Tenant
-              └── ScreeningReport  (SSN, credit score)
+2. **S3 Glacier Lifecycle Cost Analysis (B1)**
+   > "Reason through the S3 Glacier cost gotcha in `terraform/lifecycle.tf`: sold listings' photos archive to Glacier 30 days after upload, and a seller requests deletion on day 40 with immediate deletion. What does that cost given Glacier's minimum storage duration, and what changes should be made to the lifecycle configuration?"
 
-PropertyManager  (scoped to exactly one LandlordAccount)
-```
-
-A `LandlordAccount` is the billing unit — every property, every tenant, every report underneath
-it rolls up to exactly one. A `PropertyManager` is scoped to exactly one `LandlordAccount` and
-everything under it.
-
-This codebase currently tags and checks access using whatever ID happened to be on hand when
-each piece was written — that reflects how it was built, not a spec to replicate.
-
-## What not to modify
-
-`app/seed_data.py`, `app/models.py`, `fixtures/plan.json`, `terraform/terraform.tfstate` — the
-assignment's checks assume this data is unchanged.
-
-`terraform/terraform.tfstate` is checked in deliberately, not an accident — it's a seeded state
-representing 4 already-provisioned landlord media buckets, standing in for a real AWS account so
-B0 can be reproduced with `terraform plan` instead of just reasoned about. See `terraform/main.tf`
-for how to use it.
-
-## Where things are
-
-| Path | Task |
-|---|---|
-| `terraform/main.tf` | B0 |
-| `terraform/lifecycle.tf` | B1 |
-| `app/access_control.py`, `scripts/cost_tag_check.py` | B2 — stubs to implement |
-
-
-I'm working on the haven infra repo based on this readme.md and existing code base , help me implement two things in python,
-
-1) an access check ensuring a property manager can only view screening reports under their own landlord_account_id , with tests for the same account allow and cross account deny 
-
-2) A generic cost tagging check no terraform show -json tfplan that fails if  any taggable resource is missing 
-landlord_account_id , ensuring the check is idempotent."
-
-'
+3. **Python Test & Plan Script Troubleshooting**
+   > "Debug `ImportError` circular imports when running `unittest` on `app/access_control.py` and `app/seed_data.py`, and refine `scripts/cost_tag_check.py` so non-taggable resources (such as `aws_s3_bucket_lifecycle_configuration`) and non-create/update actions are skipped cleanly."
