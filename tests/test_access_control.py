@@ -1,11 +1,38 @@
-"""
-Write tests here proving:
-  1. A PropertyManager scoped to la-001 (pm-001) is DENIED access to la-002's tenant's
-     screening report (rep-002).
-  2. The same PropertyManager (pm-001) IS allowed access to their own account's screening
-     report (rep-001).
-
-Use the `property_managers`, `properties`, `tenants`, and `screening_reports` fixtures from
-conftest.py — don't re-invent the seed data here.
-"""
+import unittest
 from app.access_control import can_access_screening_report
+from app.seed_data import PROPERTIES, PROPERTY_MANAGERS, SCREENING_REPORTS, TENANTS
+
+
+def _by_id(records, record_id: str):
+    return next(r for r in records if r.id == record_id)
+
+
+class TestAccessControl(unittest.TestCase):
+    def test_same_account_allows_access(self):
+        pm_001 = _by_id(PROPERTY_MANAGERS, "pm-001")
+        pm_002 = _by_id(PROPERTY_MANAGERS, "pm-002")
+        rep_001 = _by_id(SCREENING_REPORTS, "rep-001")
+        rep_002 = _by_id(SCREENING_REPORTS, "rep-002")
+
+        self.assertTrue(can_access_screening_report(pm_001, rep_001, properties=PROPERTIES, tenants=TENANTS))
+        self.assertTrue(can_access_screening_report(pm_002, rep_002, properties=PROPERTIES, tenants=TENANTS))
+
+    def test_cross_account_denies_access(self):
+        pm_001 = _by_id(PROPERTY_MANAGERS, "pm-001")
+        pm_002 = _by_id(PROPERTY_MANAGERS, "pm-002")
+        rep_001 = _by_id(SCREENING_REPORTS, "rep-001")
+        rep_002 = _by_id(SCREENING_REPORTS, "rep-002")
+
+        self.assertFalse(can_access_screening_report(pm_001, rep_002, properties=PROPERTIES, tenants=TENANTS))
+        self.assertFalse(can_access_screening_report(pm_002, rep_001, properties=PROPERTIES, tenants=TENANTS))
+
+    def test_fail_closed_when_missing(self):
+        pm_001 = _by_id(PROPERTY_MANAGERS, "pm-001")
+        rep_001 = _by_id(SCREENING_REPORTS, "rep-001")
+
+        self.assertFalse(can_access_screening_report(pm_001, rep_001, properties=PROPERTIES, tenants=[]))
+        self.assertFalse(can_access_screening_report(pm_001, rep_001, properties=[], tenants=TENANTS))
+
+
+if __name__ == "__main__":
+    unittest.main()

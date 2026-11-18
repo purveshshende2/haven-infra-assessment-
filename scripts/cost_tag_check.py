@@ -1,34 +1,64 @@
-"""
-B2, part 2 — implement the cost-tagging check.
-
-Read fixtures/plan.json for the shape of a `terraform show -json` plan: a `resource_changes`
-list, where each entry has a `type`, an `address`, and `change.after.tags`.
-
-Implement check_plan() so it:
-  - Looks at every resource being created or updated (skip anything whose change.actions
-    isn't "create" or "update" — a "no-op"/"read" change, or a "delete" with no `after`
-    block at all).
-  - Fails (returns a non-zero exit code) if the resource is missing the tag that identifies
-    the real billing unit, per README.md's domain model — not whatever tag the resource
-    happens to already carry.
-  - Is idempotent: running this twice against the same plan file produces the same result,
-    with no duplicate output and no flipped pass/fail. This is about a single run being
-    stable and repeatable — it does not require remembering anything between runs.
-  - Prints which specific resource address(es) are missing the tag.
-
-Run manually: python scripts/cost_tag_check.py fixtures/plan.json
-"""
 import json
 import sys
 
 
+REQUIRED_TAG = "landlord_account_id"
+
+
 def check_plan(plan_path: str) -> int:
-    """
-    Returns an exit code: 0 if every resource being created or updated has
-    `landlord_account_id`, non-zero otherwise.
-    """
-    raise NotImplementedError("Implement this.")
+    with open(plan_path, "r", encoding="utf-8") as f:
+        plan = json.load(f)
+
+    violations: list[str] = []
+    seen: set[str] = set()
+
+    for rc in plan.get("resource_changes", []):
+        if rc.get("mode", "managed") != "managed":
+            continue
+
+        change = rc.get("change") or {}
+        actions = set(change.get("actions") or [])
+
+        # Only check resources being created or updated (skip no-op, read, delete)
+        if not actions.intersection({"create", "update"}):
+            continue
+
+        after = change.get("after")
+        if not isinstance(after, dict):
+            continue
+
+        # Skip non-taggable resources (neither `tags` nor `tags_all` in resource schema)
+        after_unknown = change.get("after_unknown") or {}
+        if not any(k in after or k in after_unknown for k in ("tags", "tags_all")):
+            continue
+
+        # Check both `tags` and `tags_all` for a non-empty `landlord_account_id`
+        has_valid_tag = False
+        for key in ("tags", "tags_all"):
+            tag_map = after.get(key)
+            if isinstance(tag_map, dict):
+                val = tag_map.get(REQUIRED_TAG)
+                if val is not None and str(val).strip() != "":
+                    has_valid_tag = True
+                    break
+
+        if not has_valid_tag:
+            addr = rc.get("address", "<unknown>")
+            if addr not in seen:
+                seen.add(addr)
+                violations.append(addr)
+
+    if violations:
+        for addr in violations:
+            print(f"Missing '{REQUIRED_TAG}' tag on resource: {addr}")
+        return 1
+
+    print(f"All created/updated taggable resources have '{REQUIRED_TAG}'.")
+    return 0
 
 
 if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        print("Usage: python3 scripts/cost_tag_check.py <plan.json>", file=sys.stderr)
+        sys.exit(2)
     sys.exit(check_plan(sys.argv[1]))
