@@ -1,3 +1,15 @@
+"""Fail a Terraform plan when a taggable resource lacks the billing tag.
+
+The billing unit in Haven is ``landlord_account_id``. Resources are commonly
+tagged with ``tenant_id`` instead, which does not roll up to a landlord account
+and therefore cannot support chargeback.
+
+The check is intentionally resource-agnostic: it does not name any Terraform
+resource types. Instead it detects taggable resources from the plan itself by
+looking for the presence of a ``tags`` or ``tags_all`` attribute.
+"""
+from __future__ import annotations
+
 import json
 import sys
 
