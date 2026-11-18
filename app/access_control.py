@@ -38,7 +38,11 @@ def can_access_screening_report(
     if not actor_landlord_id or not tenant_id:
         return False
 
-    tenants_by_id = {tenant.id: tenant for tenant in tenants or []}
+    # Resolve the report's tenant and property from server-side records. Never
+    # trust an ID supplied alongside the report without checking the hierarchy.
+    tenants_by_id = {
+        (tenant.id or "").strip(): tenant for tenant in tenants or []
+    }
     tenant = tenants_by_id.get(tenant_id)
     if tenant is None:
         return False
@@ -47,7 +51,9 @@ def can_access_screening_report(
     if not property_id:
         return False
 
-    properties_by_id = {prop.id: prop for prop in properties or []}
+    properties_by_id = {
+        (prop.id or "").strip(): prop for prop in properties or []
+    }
     prop = properties_by_id.get(property_id)
     if prop is None:
         return False
